@@ -296,23 +296,10 @@ async function resolveComponentTypes(children: ReactNode): Promise<ReactNode> {
 
       const { type, props } = child;
 
-      let resolvedType: ReactNodeExtended = null;
-      if (typeof type === 'string') {
-        // Child is a primitive element like 'div'
-        resolvedType = type;
-      } else if (isJSXClassElementConstructor(type)) {
-        // Child is a Class Component
-        const instance = new type(props);
-        resolvedType = instance.render ? instance.render() : instance;
-      } else {
-        // Child is a Function Component because React Server
-        // Components can be a Promise we need to await it
-        resolvedType = await type(props);
-      }
-
+      let resolvedType = await resolveComponentType(type, props);
       // `resolvedType` can have a `type` property which is the actual component
       if (!isEmpty(resolvedType) && !isPrimitive(resolvedType) && 'type' in resolvedType) {
-        resolvedType = resolvedType.type as any;
+        resolvedType = await resolveComponentType(resolvedType.type, props);
       }
 
       // If the resolved type is a lazy component we need to resolve it
@@ -343,3 +330,24 @@ async function resolveComponentTypes(children: ReactNode): Promise<ReactNode> {
     })
   );
 }
+
+const resolveComponentType = async (
+  type: string | React.JSXElementConstructor<any>,
+  props: any
+): Promise<ReactNodeExtended> => {
+  if (typeof type === 'string') {
+    // Child is a primitive element like 'div'
+    return type;
+  } else if (isJSXClassElementConstructor(type)) {
+    // Child is a Class Component
+    const instance = new type(props);
+    return instance.render ? instance.render() : instance;
+  } else if (typeof type === 'function') {
+    // Child is a Function Component because React Server
+    // Components can be a Promise we need to await it
+    return await type(props);
+  }
+
+  // This should never happen but if it does – return null to avoid errors
+  return null;
+};
